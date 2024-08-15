@@ -17,8 +17,8 @@ from streamlit_folium import st_folium
 def load_shapefiles():
     if 'MUNICIPIOS' not in st.session_state:
         # Caminho para os arquivos JSON
-        municipios_json = os.path.join(os.path.dirname(__file__), "..", "data", "Mapas", "municipios.json")
-        estados_json = os.path.join(os.path.dirname(__file__), "..", "data", "Mapas", "estados.json")
+        municipios_json = os.path.join(os.path.dirname(__file__), "..", "data", "mapas", "municipios.json")
+        estados_json = os.path.join(os.path.dirname(__file__), "..", "data", "mapas", "estados.json")
         
         # Carregar os JSONs como DataFrames, especificando a codificação utf-8-sig
         with open(municipios_json, 'r', encoding='utf-8-sig') as f:
