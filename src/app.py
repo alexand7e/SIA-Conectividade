@@ -62,11 +62,15 @@ def read_excel_files(path):
 
 
 
-def plot_interactive_map(gdf, metric_column, chave, additional_columns=[]):
+def plot_interactive_map(gdf, metric_column, chave, additional_columns=[], label=None):
     # Verifique se a coluna métrica existe no dataframe
     if metric_column not in gdf.columns:
         st.error(f"A coluna {metric_column} não está presente no dataframe.")
         return
+
+    # Defina a label da legenda
+    if label is None:
+        label = metric_column
 
     # Carregar GeoJSON de estados ou municípios, se a chave for "Código IBGE"
     if chave == "Código IBGE":
@@ -79,8 +83,8 @@ def plot_interactive_map(gdf, metric_column, chave, additional_columns=[]):
         gdf = gdf.merge(geo_data[['UF', 'geometry']], on='UF', how='left')
         
     # Remover a coluna de geometria original para evitar duplicidades
-    gdf = gdf.drop(columns=['geometry_x'])  # Remova a coluna de geometria original
-    gdf = gdf.rename(columns={'geometry_y': 'geometry'})  # Renomeie a geometria do GeoJSON corretamente
+    # gdf = gdf.drop(columns=['geometry_x'])  # Remova a coluna de geometria original
+    # gdf = gdf.rename(columns={'geometry_y': 'geometry'})  # Renomeie a geometria do GeoJSON corretamente
     gdf = gpd.GeoDataFrame(gdf, geometry='geometry')  # Converta para GeoDataFrame novamente
 
     # Crie o mapa base
@@ -102,7 +106,7 @@ def plot_interactive_map(gdf, metric_column, chave, additional_columns=[]):
         fill_color="YlOrRd",
         fill_opacity=0.7,
         line_opacity=0.2,
-        legend_name=metric_column,
+        legend_name=label,  # Usando a label personalizada
     ).add_to(m)
 
     # Adicione tooltips para mostrar os valores ao passar o mouse
@@ -119,14 +123,8 @@ def plot_interactive_map(gdf, metric_column, chave, additional_columns=[]):
 
     # Adicione um controle de camadas
     folium.LayerControl().add_to(m)
-
-    # Exiba algumas informações de depuração
     st.write(f"Número de regiões no mapa: {len(gdf)}")
     st.write(f"Colunas disponíveis: {gdf.columns.tolist()}")
-    st.write(f"Amostra de dados:")
-    st.write(gdf[fields].head())
-
-    # Exiba o mapa
     st_folium(m, width=700)
 
 
@@ -160,8 +158,6 @@ def plot_bar_chart_horizontal(df, x_column, y_column, max_categories, sort_order
     fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide', xaxis_title=y_column, yaxis_title=x_column)
 
     st.plotly_chart(fig)
-
-
 
 def plot_scatter(df, x_column, y_column, add_category_labels=False, add_trendline=False, add_value_labels=False, show_ols_stats=False):
     fig = px.scatter(df, x=x_column, y=y_column, labels={x_column: x_column, y_column: y_column},
@@ -274,31 +270,46 @@ def main():
 
     if chart_type == "Mapa":
         type_map = st.sidebar.radio("Tipo de mapa:", ("Estadual", "Municipal"))
+        
+        # Opção para escolher o tipo de agregação
+        aggregation_type = st.sidebar.selectbox(
+            "Escolha o tipo de agregação:",
+            ("Soma", "Média")
+        )
+        
+        # Opção para escolher a label a ser exibida
+        label = st.text_input("Digite o rótulo a ser exibido no mapa:", "Métrica")
+
         numeric_columns = df.select_dtypes(include=['int64', 'float64']).columns
         map_column = st.selectbox("Escolha uma métrica para o mapa", numeric_columns)
         category_columns = df.select_dtypes(include=['object', 'category']).columns
         selected_additional_columns = st.multiselect("Escolha categorias adicionais para exibir no mapa", category_columns)
+        
         chave = ''
         
         if type_map == "Estadual":
             chave = "UF"
-            df_grouped = df.groupby(chave)[map_column].sum().reset_index()
-            df = df_grouped.merge(ESTADOS, on=chave)
-            df = gpd.GeoDataFrame(df, geometry='geometry')
-            st.session_state['df_estadual_merged'] = df
-
         elif type_map == "Municipal":
             chave = "Código IBGE"
-            df_grouped = df.groupby(chave)[map_column].sum().reset_index()
-            df = df_grouped.merge(MUNICIPIOS, on=chave)
-            df = gpd.GeoDataFrame(df, geometry='geometry')
+        
+        # Aplicar o tipo de agregação selecionado
+        if aggregation_type == "Soma":
+            df_grouped = df.groupby([chave, *selected_additional_columns])[map_column].sum().reset_index()
+        elif aggregation_type == "Média":
+            df_grouped = df.groupby([chave, *selected_additional_columns])[map_column].mean().reset_index()
+        
+        # Unir com o GeoDataFrame correspondente
+        if type_map == "Estadual":
+            st.session_state['df_estadual_merged'] = df
+        elif type_map == "Municipal":
             st.session_state['df_municipal_merged'] = df
 
         numeric_columns = df.select_dtypes(include=['int64', 'float64']).columns
         if numeric_columns.empty:
             st.error("Não há colunas numéricas disponíveis para o mapa.")
         else:
-            plot_interactive_map(df, map_column, chave, additional_columns=selected_additional_columns)
+            # Passa o label e o tipo de agregação para a função de plotagem
+            plot_interactive_map(df, map_column, chave, additional_columns=selected_additional_columns, label=label)
 
 
     elif chart_type == "Barras":
