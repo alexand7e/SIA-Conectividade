@@ -1,6 +1,7 @@
 import os
 import io
 
+import json
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -12,15 +13,35 @@ import folium
 from streamlit_folium import st_folium
 
 
-
 # Função para carregar os arquivos de shapefile uma vez
 def load_shapefiles():
     if 'MUNICIPIOS' not in st.session_state:
-        municipios = os.path.join(os.path.dirname(__file__), "..", "..", "..", "Mapas", "BR_Municipios_2022", "BR_Municipios_2022.shp")# r"C:\Users\Alexandre\Downloads\BR_Municipios_2022\BR_Municipios_2022.shp"
-        estados = os.path.join(os.path.dirname(__file__), "..", "..", "..", "Mapas", "BR_UF_2022", "BR_UF_2022.shp") #r"C:\Users\Alexandre\Downloads\BR_UF_2022\BR_UF_2022.shp"
+        # Caminho para os arquivos JSON
+        municipios_json = os.path.join(os.path.dirname(__file__), "..", "data", "Mapas", "municipios.json")
+        estados_json = os.path.join(os.path.dirname(__file__), "..", "data", "Mapas", "estados.json")
         
-        st.session_state['MUNICIPIOS'] = gpd.read_file(municipios).rename(columns={"CD_MUN": "Código IBGE"})
-        st.session_state['ESTADOS'] = gpd.read_file(estados).rename(columns={"SIGLA_UF": "UF"})
+        # Carregar os JSONs como DataFrames, especificando a codificação utf-8-sig
+        with open(municipios_json, 'r', encoding='utf-8-sig') as f:
+            municipios = pd.DataFrame(json.load(f))
+        
+        with open(estados_json, 'r', encoding='utf-8-sig') as f:
+            estados = pd.DataFrame(json.load(f))
+        
+        # Transformar em GeoDataFrame, utilizando as colunas de latitude e longitude
+        municipios = gpd.GeoDataFrame(
+            municipios, 
+            geometry=gpd.points_from_xy(municipios.longitude, municipios.latitude),
+            crs="EPSG:4326"  # Definindo o CRS como WGS 84 (usado em sistemas de GPS)
+        ).rename(columns={"codigo_ibge": "Código IBGE"})
+
+        estados = gpd.GeoDataFrame(
+            estados, 
+            geometry=gpd.points_from_xy(estados.longitude, estados.latitude),
+            crs="EPSG:4326"
+        ).rename(columns={"uf": "UF"})
+
+        st.session_state['MUNICIPIOS'] = municipios
+        st.session_state['ESTADOS'] = estados
 
 def read_excel_files(path):
     dataframes = {}
