@@ -61,20 +61,36 @@ def read_excel_files(path):
     return dataframes
 
 
+
 def plot_interactive_map(gdf, metric_column, chave, additional_columns=[]):
     # Verifique se a coluna métrica existe no dataframe
     if metric_column not in gdf.columns:
         st.error(f"A coluna {metric_column} não está presente no dataframe.")
         return
 
-    # Use o formato correto de key_on com base no tipo de mapa
-    if chave == "UF":
-        key_on = "feature.properties.UF"
-    else:
-        key_on = f"feature.properties.{chave}"
+    # Carregar GeoJSON de estados ou municípios, se a chave for "Código IBGE"
+    if chave == "Código IBGE":
+        geo_data = gpd.read_file(os.path.join(os.path.dirname(__file__), "..", "data", "mapas", "geojs-100-mun.json"))
+        geo_data = geo_data.rename(columns={"id": "Código IBGE"})
+        gdf = gdf.merge(geo_data[['Código IBGE', 'geometry']], on='Código IBGE', how='left')
+    elif chave == "UF":
+        geo_data = gpd.read_file(os.path.join(os.path.dirname(__file__), "..", "data", "mapas", "geojs-100-uf.json"))
+        geo_data = geo_data.rename(columns={"id": "UF"})
+        gdf = gdf.merge(geo_data[['UF', 'geometry']], on='UF', how='left')
+        
+    # Remover a coluna de geometria original para evitar duplicidades
+    gdf = gdf.drop(columns=['geometry_x'])  # Remova a coluna de geometria original
+    gdf = gdf.rename(columns={'geometry_y': 'geometry'})  # Renomeie a geometria do GeoJSON corretamente
+    gdf = gpd.GeoDataFrame(gdf, geometry='geometry')  # Converta para GeoDataFrame novamente
 
     # Crie o mapa base
     m = folium.Map(location=[-15.788497, -47.879873], zoom_start=4)
+
+    # Verifique o campo a ser utilizado no key_on
+    if chave == "Código IBGE":
+        key_on = "feature.properties.Código IBGE"
+    else:
+        key_on = f"feature.properties.{chave}"
 
     # Adicione o choropleth ao mapa
     choropleth = folium.Choropleth(
@@ -112,8 +128,6 @@ def plot_interactive_map(gdf, metric_column, chave, additional_columns=[]):
 
     # Exiba o mapa
     st_folium(m, width=700)
-
-
 
 
 def plot_bar_chart_vertical(df, x_column, y_column, max_categories, sort_order):
